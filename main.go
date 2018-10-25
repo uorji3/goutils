@@ -1,6 +1,8 @@
 package goutils
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -15,8 +17,14 @@ import (
 
 // HTTPReqData ...
 type HTTPReqData struct {
-	Method, URL   string
-	Body, Headers map[string]string
+	Method, URL, Auth string
+	Body, Headers     map[string]string
+}
+
+// JSONReqData ...
+type JSONReqData struct {
+	Method, URL, Auth string
+	Body, Headers     map[string]interface{}
 }
 
 // WritePidFile writes a pid file, but first make sure it doesn't exist with a running pid.
@@ -40,8 +48,8 @@ func WritePidFile(pidFile string) error {
 	return ioutil.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0664)
 }
 
-// MakeRequest ...
-func (httpReq *HTTPReqData) MakeRequest() (string, error) {
+// MakeHTTPRequest ...
+func (httpReq *HTTPReqData) MakeHTTPRequest() (string, error) {
 	if len(httpReq.Body) < 0 {
 		return "", errors.New("No form body found")
 	}
@@ -63,7 +71,10 @@ func (httpReq *HTTPReqData) MakeRequest() (string, error) {
 			req.Header.Add(key, val)
 		}
 	}
-
+	if len(httpReq.Auth) > 1 {
+		user := strings.Split(httpReq.Auth, ":")
+		req.SetBasicAuth(user[0], user[1])
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("makerequest do: %v", err)
@@ -73,6 +84,42 @@ func (httpReq *HTTPReqData) MakeRequest() (string, error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("makerequest readall: %v", err)
+	}
+	return string(body), nil
+}
+
+// MakeJSONRequest ...
+func (jsonReq *JSONReqData) MakeJSONRequest() (string, error) {
+	jsonStr, err := json.Marshal(jsonReq.Body)
+	if err != nil {
+		return "", fmt.Errorf("body json marshall: %v", err)
+	}
+	req, err := http.NewRequest("POST", jsonReq.URL, bytes.NewBuffer(jsonStr))
+	if err != nil {
+		return "", fmt.Errorf("new request error: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	if len(jsonReq.Headers) > 0 {
+		for key, val := range jsonReq.Headers {
+			req.Header.Add(key, val.(string))
+		}
+	}
+
+	client := http.Client{Timeout: time.Second * 60 * 2}
+	if len(jsonReq.Auth) > 1 {
+		user := strings.Split(jsonReq.Auth, ":")
+		req.SetBasicAuth(user[0], user[1])
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("client do error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("body read error: %v", err)
 	}
 	return string(body), nil
 }
