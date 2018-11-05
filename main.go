@@ -27,6 +27,12 @@ type JSONReqData struct {
 	Body, Headers     map[string]interface{}
 }
 
+// Response ...
+type Response struct {
+	Header       http.Header
+	Status, Body string
+}
+
 // WritePidFile writes a pid file, but first make sure it doesn't exist with a running pid.
 func WritePidFile(pidFile string) error {
 	// Read in the pid file as a slice of bytes.
@@ -49,9 +55,9 @@ func WritePidFile(pidFile string) error {
 }
 
 // MakeHTTPRequest ...
-func (httpReq *HTTPReqData) MakeHTTPRequest() (string, error) {
+func (httpReq *HTTPReqData) MakeHTTPRequest() (Response, error) {
 	if len(httpReq.Body) < 0 {
-		return "", errors.New("No form body found")
+		return Response{}, errors.New("No form body found")
 	}
 	form := url.Values{}
 	for key, value := range httpReq.Body {
@@ -61,7 +67,7 @@ func (httpReq *HTTPReqData) MakeHTTPRequest() (string, error) {
 	req, err := http.NewRequest(
 		httpReq.Method, httpReq.URL, strings.NewReader(form.Encode()))
 	if err != nil {
-		return "", fmt.Errorf("makerequest: %v", err)
+		return Response{}, fmt.Errorf("makerequest: %v", err)
 	}
 	req.Header.Add("Content-Length", strconv.Itoa(len(form)))
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
@@ -77,26 +83,26 @@ func (httpReq *HTTPReqData) MakeHTTPRequest() (string, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("makerequest do: %v", err)
+		return Response{}, fmt.Errorf("makerequest do: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("makerequest readall: %v", err)
+		return Response{}, fmt.Errorf("makerequest readall: %v", err)
 	}
-	return string(body), nil
+	return Response{Body: string(body), Header: resp.Header, Status: resp.Status}, nil
 }
 
 // MakeJSONRequest ...
-func (jsonReq *JSONReqData) MakeJSONRequest() (string, error) {
+func (jsonReq *JSONReqData) MakeJSONRequest() (Response, error) {
 	jsonStr, err := json.Marshal(jsonReq.Body)
 	if err != nil {
-		return "", fmt.Errorf("body json marshall: %v", err)
+		return Response{}, fmt.Errorf("body json marshall: %v", err)
 	}
 	req, err := http.NewRequest("POST", jsonReq.URL, bytes.NewBuffer(jsonStr))
 	if err != nil {
-		return "", fmt.Errorf("new request error: %v", err)
+		return Response{}, fmt.Errorf("new request error: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -113,13 +119,13 @@ func (jsonReq *JSONReqData) MakeJSONRequest() (string, error) {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("client do error: %v", err)
+		return Response{}, fmt.Errorf("client do error: %v", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("body read error: %v", err)
+		return Response{}, fmt.Errorf("body read error: %v", err)
 	}
-	return string(body), nil
+	return Response{Body: string(body), Header: resp.Header, Status: resp.Status}, nil
 }
