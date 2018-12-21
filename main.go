@@ -27,8 +27,12 @@ type JSONReqData struct {
 	Body, Headers     map[string]interface{}
 }
 
+// HTTPXMLData ...
+type HTTPXMLData struct{ Body, URL string }
+
 // Response ...
 type Response struct {
+	StatusCode   int
 	Header       http.Header
 	Status, Body string
 }
@@ -91,7 +95,9 @@ func (httpReq *HTTPReqData) MakeHTTPRequest() (Response, error) {
 	if err != nil {
 		return Response{}, fmt.Errorf("makerequest readall: %v", err)
 	}
-	return Response{Body: string(body), Header: resp.Header, Status: resp.Status}, nil
+	return Response{
+		Body: string(body), Header: resp.Header, Status: resp.Status, StatusCode: resp.StatusCode,
+	}, nil
 }
 
 // MakeJSONRequest ...
@@ -127,5 +133,26 @@ func (jsonReq *JSONReqData) MakeJSONRequest() (Response, error) {
 	if err != nil {
 		return Response{}, fmt.Errorf("body read error: %v", err)
 	}
-	return Response{Body: string(body), Header: resp.Header, Status: resp.Status}, nil
+	return Response{
+		Body: string(body), Header: resp.Header, Status: resp.Status, StatusCode: resp.StatusCode,
+	}, nil
+}
+
+// MakeXMLRequest ...
+func (httpReq *HTTPXMLData) MakeXMLRequest() (Response, error) {
+	httpClient := http.Client{Timeout: time.Second * 60 * 2}
+	resp, err := httpClient.Post(
+		httpReq.URL, "text/xml; charset=utf-8",
+		bytes.NewBufferString(httpReq.Body),
+	)
+	if err != nil {
+		return Response{}, fmt.Errorf("xml post error: %v", err)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return Response{}, fmt.Errorf("xml response readall: %v", err)
+	}
+	return Response{
+		Body: string(body), Header: resp.Header, Status: resp.Status, StatusCode: resp.StatusCode,
+	}, nil
 }
